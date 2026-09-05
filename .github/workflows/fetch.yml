@@ -1,0 +1,31 @@
+name: Generate Phone Database
+
+on:
+  workflow_dispatch: # Allows manual button click in GitHub UI
+
+jobs:
+  build-json:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install requests
+
+      - name: Run data scraper
+        run: python fetch_phones.py
+
+      - name: Commit and push phones.json
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add phones.json
+          git diff --quiet && git diff --staged --quiet || (git commit -m "Auto-generate phones.json database" && git push)
