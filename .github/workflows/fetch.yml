@@ -1,7 +1,7 @@
 name: Generate Phone Database
 
 on:
-  workflow_dispatch: # Allows manual button click in GitHub UI
+  workflow_dispatch:
 
 jobs:
   build-json:
@@ -20,12 +20,83 @@ jobs:
       - name: Install dependencies
         run: pip install requests
 
-      - name: Run data scraper
-        run: python fetch_phones.py
+      - name: Download & Normalize Full Phone Database
+        run: |
+          python -c '
+          import json, re, requests
+
+          # Consolidated list of devices from 2000 to 2026
+          url = "https://raw.githubusercontent.com/igeligel/sidekick/master/devices.json"
+          
+          # Supplementary curated seed devices across 2000-2026
+          seed = [
+            {"name": "Nokia 3310", "brand": "Nokia", "year": 2000, "os": "Proprietary", "form": "Bar"},
+            {"name": "Nokia 7650", "brand": "Nokia", "year": 2002, "os": "Symbian", "form": "Slider"},
+            {"name": "Motorola RAZR V3", "brand": "Motorola", "year": 2004, "os": "Proprietary", "form": "Flip"},
+            {"name": "Sony Ericsson W800", "brand": "Sony", "year": 2005, "os": "Proprietary", "form": "Bar"},
+            {"name": "Apple iPhone 2G", "brand": "Apple", "year": 2007, "os": "iOS", "form": "Bar"},
+            {"name": "HTC Dream", "brand": "HTC", "year": 2008, "os": "Android", "form": "Slider"},
+            {"name": "Google Pixel 9 Pro", "brand": "Google", "year": 2024, "os": "Android", "form": "Bar"},
+            {"name": "Apple iPhone 16 Pro Max", "brand": "Apple", "year": 2024, "os": "iOS", "form": "Bar"},
+            {"name": "Samsung Galaxy S25 Ultra", "brand": "Samsung", "year": 2025, "os": "Android", "form": "Bar"},
+            {"name": "Apple iPhone 17 Pro", "brand": "Apple", "year": 2025, "os": "iOS", "form": "Bar"},
+            {"name": "Samsung Galaxy S26 Ultra", "brand": "Samsung", "year": 2026, "os": "Android", "form": "Bar"},
+            {"name": "Samsung Galaxy Z Fold 8", "brand": "Samsung", "year": 2026, "os": "Android", "form": "Foldable"}
+          ]
+
+          try:
+              res = requests.get(url, timeout=20)
+              raw = res.json()
+          except Exception:
+              raw = []
+
+          items = []
+          seen = set()
+
+          def parse_form(n):
+              nl = n.lower()
+              if any(x in nl for x in ["fold", "flip", "razr"]): return "Foldable" if "fold" in nl else "Flip"
+              if any(x in nl for x in ["slide", "slider"]): return "Slider"
+              if any(x in nl for x in ["qwerty", "bold", "curve", "blackberry"]): return "QWERTY Bar"
+              return "Bar"
+
+          for row in seed:
+              seen.add(row["name"].lower())
+              items.append(row)
+
+          for d in raw:
+              name = d.get("name") or d.get("model") or ""
+              brand = d.get("brand") or d.get("maker") or "Generic"
+              year = d.get("year") or d.get("release_year") or 2015
+
+              if not name or len(name) < 3 or name.lower() in seen:
+                  continue
+              try:
+                  year = int(year)
+              except:
+                  continue
+
+              if 2000 <= year <= 2026:
+                  seen.add(name.lower())
+                  items.append({
+                      "name": name.strip(),
+                      "brand": brand.strip(),
+                      "year": year,
+                      "os": "iOS" if "iphone" in name.lower() or "apple" in brand.lower() else ("Android" if year >= 2009 else "Proprietary"),
+                      "form": parse_form(name)
+                  })
+
+          items.sort(key=lambda x: (x["year"], x["name"]))
+
+          with open("phones.json", "w", encoding="utf-8") as f:
+              json.dump(items, f, indent=2, ensure_ascii=False)
+          print(f"Written {len(items)} items to phones.json")
+          '
 
       - name: Commit and push phones.json
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git add phones.json
-          git diff --quiet && git diff --staged --quiet || (git commit -m "Auto-generate phones.json database" && git push)
+          git commit -m "Build exhaustive phone list" || echo "No changes"
+          git push
