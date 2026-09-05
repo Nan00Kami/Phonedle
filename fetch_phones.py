@@ -1,23 +1,10 @@
 import json
 import re
+import time
 import requests
 
 SPARQL_URL = "https://query.wikidata.org/sparql"
-
-QUERY = """
-SELECT DISTINCT ?phoneLabel ?brandLabel ?year ?osLabel WHERE {
-  VALUES ?type { wd:Q1140645 wd:Q22645 }
-  ?phone wdt:P31 ?type .
-  ?phone wdt:P176 ?brand .
-  ?phone wdt:P577 ?date .
-  BIND(YEAR(?date) AS ?year)
-  FILTER(?year >= 2000 && ?year <= 2026)
-  OPTIONAL { ?phone wdt:P306 ?os . }
-  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
-}
-ORDER BY ?year
-LIMIT 1200
-"""
+HEADERS = {"User-Agent": "PhonleFullDBBuilder/2.0 (GitHubActions)"}
 
 def clean_os(os_raw, year):
     if not os_raw or os_raw.startswith("Q"):
@@ -45,37 +32,68 @@ def infer_form_factor(name):
         return "QWERTY Bar"
     return "Bar"
 
-def main():
-    headers = {"User-Agent": "PhonleBot/1.0 (browser-build)"}
-    res = requests.get(SPARQL_URL, params={"query": QUERY, "format": "json"}, headers=headers)
-    res.raise_for_status()
-    data = res.json()
+def fetch_year(year):
+    # Lean, unjoined query targeted at a single year to guarantee sub-second execution
+    query = f"""
+    SELECT DISTINCT ?phoneLabel ?brandLabel ?osLabel WHERE {{
+      VALUES ?type {{ wd:Q1140645 wd:Q22645 }}
+      ?phone wdt:P31 ?type .
+      ?phone wdt:P577 ?date .
+      FILTER(YEAR(?date) = {year})
+      OPTIONAL {{ ?phone wdt:P176 ?brand . }}
+      OPTIONAL {{ ?phone wdt:P306 ?os . }}
+      SERVICE wikibase:label {{ bd:serviceParam wikibase:language "en". }}
+    }}
+    """
+    try:
+        res = requests.get(SPARQL_URL, params={"query": query, "format": "json"}, headers=HEADERS, timeout=45)
+        res.raise_for_status()
+        return res.json().get("results", {}).get("bindings", [])
+    except Exception as e:
+        print(f"Warning: Year {year} encountered an error: {e}")
+        return []
 
-    results = []
+def main():
+    all_phones = []
     seen = set()
 
-    for item in data["results"]["bindings"]:
-        name = item.get("phoneLabel", {}).get("value", "").strip()
-        brand = item.get("brandLabel", {}).get("value", "").strip()
-        year_str = item.get("year", {}).get("value", "0")
-        os_raw = item.get("osLabel", {}).get("value", "")
+    print("Fetching phone records from 2000 to 2026...")
+    for year in range(2000, 2027):
+        print(f"Querying models for {year}...")
+        records = fetch_year(year)
+        
+        for item in records:
+            name = item.get("phoneLabel", {}).get("value", "").strip()
+            brand = item.get("brandLabel", {}).get("value", "Generic").strip()
+            os_raw = item.get("osLabel", {}).get("value", "")
 
-        if re.match(r"^Q\d+$", name) or not name or len(name) < 3:
-            continue
+            # Filter out blank labels, raw Wikidata Q-codes, or non-phone metadata
+            if not name or re.match(r"^Q\d+$", name) or len(name) < 2:
+                continue
 
-        year = int(year_str)
-        if name.lower() not in seen:
-            seen.add(name.lower())
-            results.append({
-                "name": name,
-                "brand": brand if brand and not brand.startswith("Q") else "Generic",
-                "year": year,
-                "os": clean_os(os_raw, year),
-                "form": infer_form_factor(name)
-            })
+            brand_clean = "Generic" if re.match(r"^Q\d+$", brand) else brand
 
+            # Deduplicate items
+            key = (name.lower(), year)
+            if key not in seen:
+                seen.add(key)
+                all_phones.append({
+                    "name": name,
+                    "brand": brand_clean,
+                    "year": year,
+                    "os": clean_os(os_raw, year),
+                    "form": infer_form_factor(name)
+                })
+        
+        # Respect Wikidata API rate-limit etiquette between chunked iterations
+        time.sleep(1.2)
+
+    # Sort lexicographically by name
+    all_phones.sort(key=lambda x: (x["year"], x["name"]))
+
+    print(f"Extraction complete. Writing {len(all_phones)} devices to phones.json...")
     with open("phones.json", "w", encoding="utf-8") as f:
-        json.dump(results, f, indent=2, ensure_ascii=False)
+        json.dump(all_phones, f, indent=2, ensure_ascii=False)
 
 if __name__ == "__main__":
     main()
