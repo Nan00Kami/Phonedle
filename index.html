@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PHONLE — The Daily Mobile Guess</title>
+  <style>
+    :root {
+      --bg: #121213;
+      --card-bg: #1a1a1b;
+      --text: #ffffff;
+      --subtext: #818384;
+      --border: #3a3a3c;
+      --correct: #538d4e;
+      --partial: #b59f3b;
+      --absent: #3a3a3c;
+      --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background-color: var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+      padding: 16px;
+    }
+    header {
+      width: 100%;
+      max-width: 620px;
+      text-align: center;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 12px;
+      margin-bottom: 20px;
+    }
+    header h1 { font-size: 2rem; letter-spacing: 2px; font-weight: 800; }
+    header p { color: var(--subtext); font-size: 0.85rem; margin-top: 4px; }
+
+    #game-container {
+      width: 100%;
+      max-width: 620px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .input-row {
+      display: flex;
+      gap: 8px;
+      position: relative;
+    }
+    input[type="text"] {
+      flex: 1;
+      padding: 14px;
+      border-radius: 4px;
+      border: 2px solid var(--border);
+      background: var(--card-bg);
+      color: #fff;
+      font-size: 1rem;
+      outline: none;
+    }
+    input[type="text"]:focus { border-color: #565758; }
+    button#submit-btn {
+      padding: 0 20px;
+      border-radius: 4px;
+      border: none;
+      background: var(--correct);
+      color: #fff;
+      font-weight: 700;
+      cursor: pointer;
+      font-size: 1rem;
+    }
+    button#submit-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    #suggestions {
+      position: absolute;
+      top: 100%;
+      left: 0;
+      right: 0;
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      max-height: 180px;
+      overflow-y: auto;
+      z-index: 10;
+      border-radius: 4px;
+      display: none;
+    }
+    .suggestion-item {
+      padding: 10px 14px;
+      cursor: pointer;
+      border-bottom: 1px solid #272729;
+    }
+    .suggestion-item:hover { background: #2f2f31; }
+
+    .guess-table {
+      width: 100%;
+      border-collapse: separate;
+      border-spacing: 0 8px;
+    }
+    .guess-table th {
+      color: var(--subtext);
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      padding: 4px;
+      text-align: center;
+    }
+    .guess-cell {
+      padding: 12px 6px;
+      text-align: center;
+      font-size: 0.85rem;
+      font-weight: 600;
+      border: 1px solid var(--border);
+      min-width: 60px;
+    }
+    .cell-correct { background-color: var(--correct); border-color: var(--correct); }
+    .cell-absent { background-color: var(--absent); border-color: var(--absent); }
+    .cell-partial { background-color: var(--partial); border-color: var(--partial); }
+
+    #end-modal {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.7);
+      justify-content: center;
+      align-items: center;
+      padding: 16px;
+    }
+    .modal-content {
+      background: var(--card-bg);
+      padding: 24px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      text-align: center;
+      max-width: 380px;
+      width: 100%;
+    }
+    .modal-content h2 { margin-bottom: 8px; }
+    .modal-content p { color: var(--subtext); margin-bottom: 16px; }
+    .share-btn {
+      padding: 10px 20px;
+      background: var(--correct);
+      color: white;
+      border: none;
+      border-radius: 4px;
+      font-weight: bold;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <h1>PHONLE</h1>
+    <p>Guess the mystery handset (2000–2026)</p>
+  </header>
+
+  <main id="game-container">
+    <div class="input-row">
+      <input type="text" id="phone-input" placeholder="Type a phone name..." autocomplete="off" />
+      <button id="submit-btn">GUESS</button>
+      <div id="suggestions"></div>
+    </div>
+
+    <table class="guess-table">
+      <thead>
+        <tr>
+          <th>Phone</th>
+          <th>Brand</th>
+          <th>Year</th>
+          <th>OS</th>
+          <th>Form Factor</th>
+        </tr>
+      </thead>
+      <tbody id="guesses-body"></tbody>
+    </table>
+  </main>
+
+  <div id="end-modal">
+    <div class="modal-content">
+      <h2 id="modal-title">Solved!</h2>
+      <p id="modal-desc"></p>
+      <button class="share-btn" onclick="copyResults()">Copy Share Link</button>
+    </div>
+  </div>
+
+  <script>
+    // Phone database: 2000–2026
+    const PHONES = [
+      { name: "Nokia 3310", brand: "Nokia", year: 2000, os: "Proprietary", form: "Bar" },
+      { name: "Motorola RAZR V3", brand: "Motorola", year: 2004, os: "Proprietary", form: "Flip" },
+      { name: "Sony Ericsson K800i", brand: "Sony", year: 2006, os: "Proprietary", form: "Bar" },
+      { name: "Apple iPhone 2G", brand: "Apple", year: 2007, os: "iOS", form: "Bar" },
+      { name: "HTC Dream (G1)", brand: "HTC", year: 2008, os: "Android", form: "Slider" },
+      { name: "BlackBerry Bold 9700", brand: "BlackBerry", year: 2009, os: "BlackBerry OS", form: "QWERTY Bar" },
+      { name: "Samsung Galaxy S", brand: "Samsung", year: 2010, os: "Android", form: "Bar" },
+      { name: "Nokia Lumia 920", brand: "Nokia", year: 2012, os: "Windows Phone", form: "Bar" },
+      { name: "Apple iPhone 6", brand: "Apple", year: 2014, os: "iOS", form: "Bar" },
+      { name: "Google Pixel", brand: "Google", year: 2016, os: "Android", form: "Bar" },
+      { name: "Apple iPhone X", brand: "Apple", year: 2017, os: "iOS", form: "Bar" },
+      { name: "Samsung Galaxy Fold", brand: "Samsung", year: 2019, os: "Android", form: "Foldable" },
+      { name: "Apple iPhone 13 Pro", brand: "Apple", year: 2021, os: "iOS", form: "Bar" },
+      { name: "Samsung Galaxy S24 Ultra", brand: "Samsung", year: 2024, os: "Android", form: "Bar" },
+      { name: "Apple iPhone 17 Pro", brand: "Apple", year: 2025, os: "iOS", form: "Bar" },
+      { name: "Samsung Galaxy Z Fold 8", brand: "Samsung", year: 2026, os: "Android", form: "Foldable" }
+    ];
+
+    // Seeded daily phone pick
+    const startDate = new Date("2026-01-01").getTime();
+    const dayIndex = Math.floor((new Date().setHours(0,0,0,0) - startDate) / (1000 * 60 * 60 * 24));
+    const target = PHONES[Math.abs(dayIndex) % PHONES.length];
+
+    let attempts = 0;
+    const maxAttempts = 6;
+    let gameOver = false;
+
+    const input = document.getElementById("phone-input");
+    const suggestions = document.getElementById("suggestions");
+    const submitBtn = document.getElementById("submit-btn");
+    const tbody = document.getElementById("guesses-body");
+
+    // Autocomplete filter
+    input.addEventListener("input", () => {
+      const val = input.value.trim().toLowerCase();
+      suggestions.innerHTML = "";
+      if (!val) { suggestions.style.display = "none"; return; }
+
+      const matches = PHONES.filter(p => p.name.toLowerCase().includes(val));
+      if (matches.length > 0) {
+        suggestions.style.display = "block";
+        matches.forEach(m => {
+          const div = document.createElement("div");
+          div.className = "suggestion-item";
+          div.textContent = m.name;
+          div.onclick = () => {
+            input.value = m.name;
+            suggestions.style.display = "none";
+          };
+          suggestions.appendChild(div);
+        });
+      } else {
+        suggestions.style.display = "none";
+      }
+    });
+
+    submitBtn.addEventListener("click", makeGuess);
+    input.addEventListener("keydown", (e) => { if (e.key === "Enter") makeGuess(); });
+
+    function makeGuess() {
+      if (gameOver) return;
+      const guessName = input.value.trim();
+      const guess = PHONES.find(p => p.name.toLowerCase() === guessName.toLowerCase());
+
+      if (!guess) {
+        alert("Please pick a valid phone from the list.");
+        return;
+      }
+
+      attempts++;
+      input.value = "";
+      suggestions.style.display = "none";
+
+      const tr = document.createElement("tr");
+
+      // Brand match
+      const brandClass = guess.brand === target.brand ? "cell-correct" : "cell-absent";
+      // Form Factor match
+      const formClass = guess.form === target.form ? "cell-correct" : "cell-absent";
+      // OS match
+      const osClass = guess.os === target.os ? "cell-correct" : "cell-absent";
+
+      // Year match + indicator
+      let yearClass = "cell-absent";
+      let yearIndicator = "";
+      if (guess.year === target.year) {
+        yearClass = "cell-correct";
+      } else {
+        yearIndicator = guess.year < target.year ? " ↑" : " ↓";
+      }
+
+      const isExactMatch = guess.name === target.name;
+      const nameClass = isExactMatch ? "cell-correct" : "cell-absent";
+
+      tr.innerHTML = `
+        <td class="guess-cell ${nameClass}">${guess.name}</td>
+        <td class="guess-cell ${brandClass}">${guess.brand}</td>
+        <td class="guess-cell ${yearClass}">${guess.year}${yearIndicator}</td>
+        <td class="guess-cell ${osClass}">${guess.os}</td>
+        <td class="guess-cell ${formClass}">${guess.form}</td>
+      `;
+
+      tbody.insertBefore(tr, tbody.firstChild);
+
+      if (isExactMatch) {
+        endGame(true);
+      } else if (attempts >= maxAttempts) {
+        endGame(false);
+      }
+    }
+
+    function endGame(won) {
+      gameOver = true;
+      input.disabled = true;
+      submitBtn.disabled = true;
+      const modal = document.getElementById("end-modal");
+      document.getElementById("modal-title").textContent = won ? "Well Done!" : "Game Over";
+      document.getElementById("modal-desc").textContent = won 
+        ? `You guessed the ${target.name} in ${attempts} try/tries.` 
+        : `The correct handset was the ${target.name}.`;
+      modal.style.display = "flex";
+    }
+
+    function copyResults() {
+      const text = `Phonle Day ${dayIndex} - ${attempts}/${maxAttempts}\nTry it on GitHub Pages!`;
+      navigator.clipboard.writeText(text).then(() => alert("Results copied to clipboard!"));
+    }
+  </script>
+</body>
+</html>
