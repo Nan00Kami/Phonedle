@@ -1,9 +1,86 @@
 [
   {
-    "name": "Xiaomi 13T Pro",
-    "brand": "Xiaomi",
-    "year": 2023,
+    "name": "Nokia 3310",
+    "brand": "Nokia",
+    "year": 2000,
+    "os": "Proprietary",
+    "form": "Bar"
+  },
+  {
+    "name": "Nokia 7650",
+    "brand": "Nokia",
+    "year": 2002,
+    "os": "Symbian",
+    "form": "Slider"
+  },
+  {
+    "name": "Motorola RAZR V3",
+    "brand": "Motorola",
+    "year": 2004,
+    "os": "Proprietary",
+    "form": "Flip"
+  },
+  {
+    "name": "Sony Ericsson W800",
+    "brand": "Sony",
+    "year": 2005,
+    "os": "Proprietary",
+    "form": "Bar"
+  },
+  {
+    "name": "Apple iPhone 2G",
+    "brand": "Apple",
+    "year": 2007,
+    "os": "iOS",
+    "form": "Bar"
+  },
+  {
+    "name": "HTC Dream",
+    "brand": "HTC",
+    "year": 2008,
+    "os": "Android",
+    "form": "Slider"
+  },
+  {
+    "name": "Apple iPhone 16 Pro Max",
+    "brand": "Apple",
+    "year": 2024,
+    "os": "iOS",
+    "form": "Bar"
+  },
+  {
+    "name": "Google Pixel 9 Pro",
+    "brand": "Google",
+    "year": 2024,
     "os": "Android",
     "form": "Bar"
+  },
+  {
+    "name": "Apple iPhone 17 Pro",
+    "brand": "Apple",
+    "year": 2025,
+    "os": "iOS",
+    "form": "Bar"
+  },
+  {
+    "name": "Samsung Galaxy S25 Ultra",
+    "brand": "Samsung",
+    "year": 2025,
+    "os": "Android",
+    "form": "Bar"
+  },
+  {
+    "name": "Samsung Galaxy S26 Ultra",
+    "brand": "Samsung",
+    "year": 2026,
+    "os": "Android",
+    "form": "Bar"
+  },
+  {
+    "name": "Samsung Galaxy Z Fold 8",
+    "brand": "Samsung",
+    "year": 2026,
+    "os": "Android",
+    "form": "Foldable"
   }
 ]
